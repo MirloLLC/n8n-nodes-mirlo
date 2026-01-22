@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-mirlo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Mirlo - Send WhatsApp messages, manage broadcasts, contacts and conversations",
   "keywords": [
     "n8n-community-node-package",
@@ -31,7 +31,7 @@
     "format": "prettier nodes credentials --write",
     "lint": "eslint 'nodes/**/*.ts' 'credentials/**/*.ts'",
     "lintfix": "eslint 'nodes/**/*.ts' 'credentials/**/*.ts' --fix",
-    "prepublishOnly": "npm run build && npm run lint -- -c .eslintrc.prepublish.js nodes credentials package.json"
+    "prepublishOnly": "npm run build && npm run lint"
   },
   "files": [
     "dist"
