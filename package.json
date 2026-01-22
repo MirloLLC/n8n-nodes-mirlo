@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-mirlo",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "n8n community node for Mirlo - Send WhatsApp messages, manage broadcasts, contacts and conversations",
   "keywords": [
     "n8n-community-node-package",
