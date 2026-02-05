@@ -75,6 +75,12 @@ export class Mirlo implements INodeType {
 				},
 				options: [
 					{
+						name: 'Send',
+						value: 'send',
+						description: 'Send a direct message (text, image, video, audio, document) within 24h window',
+						action: 'Send a direct message',
+					},
+					{
 						name: 'Send Template',
 						value: 'sendTemplate',
 						description: 'Send a WhatsApp template message to a single recipient',
@@ -93,10 +99,10 @@ export class Mirlo implements INodeType {
 						action: 'Get many messages',
 					},
 				],
-				default: 'sendTemplate',
+				default: 'send',
 			},
 
-			// Message: Send Template fields
+			// Message: Send & Send Template common fields
 			{
 				displayName: 'Organization ID',
 				name: 'organizationId',
@@ -105,7 +111,7 @@ export class Mirlo implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendTemplate'],
+						operation: ['send', 'sendTemplate'],
 					},
 				},
 				default: '',
@@ -119,7 +125,7 @@ export class Mirlo implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendTemplate'],
+						operation: ['send', 'sendTemplate'],
 					},
 				},
 				default: '',
@@ -133,13 +139,115 @@ export class Mirlo implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendTemplate'],
+						operation: ['send', 'sendTemplate'],
 					},
 				},
 				default: '',
 				placeholder: '+521234567890',
 				description: 'Recipient phone number with country code',
 			},
+
+			// Message: Send fields
+			{
+				displayName: 'Message Type',
+				name: 'messageType',
+				type: 'options',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['send'],
+					},
+				},
+				options: [
+					{
+						name: 'Text',
+						value: 'text',
+					},
+					{
+						name: 'Image',
+						value: 'image',
+					},
+					{
+						name: 'Video',
+						value: 'video',
+					},
+					{
+						name: 'Audio',
+						value: 'audio',
+					},
+					{
+						name: 'Document',
+						value: 'document',
+					},
+				],
+				default: 'text',
+				description: 'The type of message to send',
+			},
+			{
+				displayName: 'Text Body',
+				name: 'textBody',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['send'],
+						messageType: ['text'],
+					},
+				},
+				default: '',
+				description: 'The text content of the message',
+			},
+			{
+				displayName: 'Media URL',
+				name: 'mediaUrl',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['send'],
+						messageType: ['image', 'video', 'audio', 'document'],
+					},
+				},
+				default: '',
+				placeholder: 'https://example.com/media.jpg',
+				description: 'The URL of the media file to send',
+			},
+			{
+				displayName: 'Caption',
+				name: 'caption',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['send'],
+						messageType: ['image', 'video', 'document'],
+					},
+				},
+				default: '',
+				description: 'Optional caption for the media',
+			},
+			{
+				displayName: 'Filename',
+				name: 'filename',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['send'],
+						messageType: ['document'],
+					},
+				},
+				default: '',
+				description: 'Optional filename for the document',
+			},
+
+			// Message: Send Template fields
 			{
 				displayName: 'Template ID',
 				name: 'metaTemplateId',
@@ -166,6 +274,19 @@ export class Mirlo implements INodeType {
 				},
 				default: '[]',
 				description: 'Template components with parameters (JSON array)',
+			},
+			{
+				displayName: 'Do Not Pause',
+				name: 'doNotPause',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['message'],
+						operation: ['sendTemplate'],
+					},
+				},
+				default: true,
+				description: 'Whether to bypass automatic pause rules and send the message immediately',
 			},
 
 			// Message: Get fields
@@ -600,12 +721,73 @@ export class Mirlo implements INodeType {
 
 				// MESSAGE operations
 				if (resource === 'message') {
-					if (operation === 'sendTemplate') {
+					if (operation === 'send') {
+						const organizationId = this.getNodeParameter('organizationId', i) as string;
+						const organizationAddress = this.getNodeParameter('organizationAddress', i) as string;
+						const to = this.getNodeParameter('to', i) as string;
+						const messageType = this.getNodeParameter('messageType', i) as string;
+
+						// Build the message object based on type
+						let message: IDataObject;
+
+						if (messageType === 'text') {
+							const textBody = this.getNodeParameter('textBody', i) as string;
+							message = {
+								type: 'text',
+								text: {
+									body: textBody,
+								},
+							};
+						} else {
+							const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
+							const mediaContent: IDataObject = {
+								link: mediaUrl,
+							};
+
+							// Add caption for image, video, document
+							if (['image', 'video', 'document'].includes(messageType)) {
+								const caption = this.getNodeParameter('caption', i, '') as string;
+								if (caption) {
+									mediaContent.caption = caption;
+								}
+							}
+
+							// Add filename for document
+							if (messageType === 'document') {
+								const filename = this.getNodeParameter('filename', i, '') as string;
+								if (filename) {
+									mediaContent.filename = filename;
+								}
+							}
+
+							message = {
+								type: messageType,
+								[messageType]: mediaContent,
+							};
+						}
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'mirloApi',
+							{
+								method: 'POST' as IHttpRequestMethods,
+								url: `${baseUrl}/v1/messages/send`,
+								body: {
+									organization_id: organizationId,
+									organization_address: organizationAddress,
+									to,
+									message,
+								},
+								json: true,
+							},
+						);
+					} else if (operation === 'sendTemplate') {
 						const organizationId = this.getNodeParameter('organizationId', i) as string;
 						const organizationAddress = this.getNodeParameter('organizationAddress', i) as string;
 						const to = this.getNodeParameter('to', i) as string;
 						const metaTemplateId = this.getNodeParameter('metaTemplateId', i) as string;
 						const componentsJson = this.getNodeParameter('components', i) as string;
+						const doNotPause = this.getNodeParameter('doNotPause', i) as boolean;
 
 						let components = [];
 						try {
@@ -626,6 +808,7 @@ export class Mirlo implements INodeType {
 									to,
 									meta_template_id: metaTemplateId,
 									components,
+									do_not_pause: doNotPause,
 								},
 								json: true,
 							},
